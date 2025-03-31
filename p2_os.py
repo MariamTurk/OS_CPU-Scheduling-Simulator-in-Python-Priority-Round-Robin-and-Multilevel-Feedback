@@ -1,0 +1,374 @@
+# Mariam Turk
+# id : 1211115
+# sec :1
+# Dr.Abdel Salam Sayyad
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+
+
+# the Process class
+class Process:
+    def __init__(self, name, arrival_time, burst_time, priority, comeback_time):
+        # for the process
+        self.name = name
+        # for time when the process arrives in the system
+        self.arrival_time = arrival_time
+        # for total CPU time need for the process
+        self.burst_time = burst_time
+        # initial priority of the process
+        self.priority = priority
+        #time to re enter the ready queue after waiting
+        self.comeback_time = comeback_time
+        # remaining CPU time need
+        self.remaining_burst_time = burst_time
+        # initial  priority of the process
+        self.remaining_priority = priority
+        # total time  in the ready queue
+        self.total_ready_queue_time = 0
+        # total time in the waiting queue
+        self.total_wait_queue_time = 0
+        # time spent in the ready queue during the latest entry
+        self.ready_queue_time = 0
+        # time spent in the waiting queue during the latest entry
+        self.wait_queue_time = 0
+        # real cpu time received so far
+        self.CPU_time = 0
+        # indicates if the process has started execution
+        self.has_started = False
+
+
+
+# non preemptive priority scheduling with round robin
+def non_preemptive_priority_scheduling_with_round_robin(process_list, total_time, q):
+    #current time in the simulation
+    time = 0
+    #list to keep track of the order in which processes are execut
+    processes = []
+    #list to store the time points at which processes start or stop execution
+    times = []
+    # queue of processes that are ready to execute
+    ready_queue = []
+    # dictionary to keep track of processes and their comeback times after being in the waiting queue
+    waiting_queue = {}
+    process_list_copy = [Process(p.name, p.arrival_time, p.burst_time, p.priority, p.comeback_time) for p in
+                         process_list]  # Make a copy of the process list
+
+    while time < total_time:
+        for p in process_list_copy:
+            # checks if the process has arrived and  not start
+            if p.arrival_time <= time and not p.has_started:
+                # if the process arrive and not start , add it in the ready queue
+                ready_queue.append(p)
+                # mark this process to know that it is start , i do that to not add this process to the ready queue agin
+                p.has_started = True
+        # where process is the key and comeback_time is the value list is used to create a copy of the items
+        for process, comeback_time in list(waiting_queue.items()):
+            # checks if the process comeback time has been reached or passed
+            if comeback_time <= time:
+                # if the process is ready to come back, it is added to the ready queue
+                ready_queue.append(process)
+                # remove the process from the waiting queue ,it is now in the ready queue
+                del waiting_queue[process]
+        # sorts the ready_queue in place by the priority attribute of each process
+        ready_queue.sort(key=lambda x: x.priority)
+        # checks if there are any processes in the ready queue
+        if ready_queue:
+            # takes the process with the highest priority and removes it from the ready queue
+            current_process = ready_queue.pop(0)
+            processes.append(current_process.name)
+            # take the current time in the times list
+            times.append(time)
+            # checks if the remaining burst time of the current process is less than or equal to the time quantum
+            if current_process.remaining_burst_time <= q:
+                # if true, increments the current time by the remaining burst time of the process
+                time += current_process.remaining_burst_time
+                # sets the remaining burst time to 0 since the process has finished execution
+                current_process.remaining_burst_time = 0
+            else:
+                # increments the current time by q
+                time += q
+                # decreases the remaining burst time of the process by q
+                current_process.remaining_burst_time -= q
+                # adds the process back to the ready_queue for further execution later
+                ready_queue.append(current_process)
+
+            waiting_queue[current_process] = time + current_process.comeback_time
+        else:
+            time += 1
+
+    times.append(total_time)
+    return processes, times
+
+
+# Preemptive Priority Scheduling with Aging
+def preemptive_priority_scheduling_with_aging(process_list, total_time, q):
+    time = 0
+    current_process = None
+    # list for order in which processes are execute
+    processes = []
+    #  list to record the time  when each process starts and stops execution
+    times = []
+    #  to store processes that are ready to be execute
+    ready_queue = []
+    # dictionary to track the aging counters for each process by their name
+    aging_tracker = {}
+
+    for p in process_list:
+        # this for how long each process has been waiting to be executed
+        aging_tracker[p.name] = 0
+
+    while time < total_time:
+        # add newly arrived processes to the ready queue
+        for p in process_list:
+            # checks if the process has arrived and has not started
+            if p.arrival_time <= time and not p.has_started:
+                # adds the process to the ready queue
+                ready_queue.append(p)
+                # marks the process as started
+                p.has_started = True
+                # resets the aging counter for the process
+                aging_tracker[p.name] = 0
+
+        # sort the ready queue by priority
+        ready_queue.sort(key=lambda x: (x.remaining_priority, x.arrival_time))
+
+        # Select the next process to execute
+        # checks if there are any processes in the ready queue
+        if ready_queue:
+            # selects the process with the highest priority
+            next_process = ready_queue[0]
+            # checks if there is no current process or if the current process has a lower priority than next process
+            if not current_process or current_process.remaining_priority > next_process.remaining_priority:
+                # if there is a current process running
+                if current_process:
+                    # adds the current process back to the ready queue
+                    ready_queue.append(current_process)
+                # sets current process to next process, making it the new current process
+                current_process = next_process
+                # remove next process from the ready queue
+                ready_queue.remove(next_process)
+                # appends the name of the current process to the processes list
+                processes.append(current_process.name)
+                times.append(time)
+
+        # increment the aging counter and apply aging if necessary
+        for process in ready_queue:
+            # increments the aging counter for each process
+            aging_tracker[process.name] += 1
+            # checks if the aging counter for a process has reached 5
+            if aging_tracker[process.name] >= 5:
+                # decreases the remaining_priority of the process by 1, applying aging, but ensures it does not go below 0
+                process.remaining_priority = max(process.remaining_priority - 1, 0)
+                #resets the aging counter for the process
+                aging_tracker[process.name] = 0
+
+        # execute the current process
+        if current_process:
+            # checks if the remaining burst time of the current process is less than or equal to the time (q)
+            if current_process.remaining_burst_time <= q:
+                #increments the current time by the remaining burst time
+                time += current_process.remaining_burst_time
+                # sets the remaining burst time to 0 when the process  finished execution.
+                current_process.remaining_burst_time = 0
+                #
+                current_process = None
+                # if the remaining burst time is greater than q
+            else:
+                # increments the current time by q
+                time += q
+                # decreases the remaining burst time of the process by q
+                current_process.remaining_burst_time -= q
+                # adds the process back to the ready queue
+                ready_queue.append(current_process)
+                current_process = None
+        else:
+            time += 1
+
+    times.append(total_time)
+    return processes, times
+
+
+# multilevel feedback queue scheduling
+def multilevel_feedback_queue(process_list, total_time):
+    # start the simulation at time
+    time = 0
+    # lists to store the order of execution and the time
+    processes = []
+    times = []
+    # three empty lists for the three queue levels
+    ready_queues = [[] for _ in range(3)]
+    # tme quantums for each queue level: 8, 16, and 32
+    quantum = [8, 16, 32]
+    process_list_copy = [Process(p.name, p.arrival_time, p.burst_time, p.priority, p.comeback_time) for p in
+                         process_list]  # Make a copy of the process list
+
+    # to check if any processes have arrived by the current simulation time and adds them to the highest-priority ready queue if they have not yet started
+    while time < total_time:
+        for p in process_list_copy:
+            if p.arrival_time <= time and not p.has_started:
+                ready_queues[0].append(p)
+                p.has_started = True
+        # iterates over the different priority levels of the ready queues to find a process to execute. The loop allows the scheduler to select a process from the highest-priority queue that has ready processes
+        for i in range(3):
+            if ready_queues[i]:
+                current_process = ready_queues[i].pop(0)
+                processes.append(current_process.name)
+                times.append(time)
+                # checks if the remaining burst time of current_process is less than or equal to the time quantum for the current queue level
+                if current_process.remaining_burst_time <= quantum[i]:
+                    time += current_process.remaining_burst_time
+                    current_process.remaining_burst_time = 0
+                # If the process cannot complete within the current time quantum
+                else:
+                    time += quantum[i]
+                    current_process.remaining_burst_time -= quantum[i]
+                    if i < 2:
+                        ready_queues[i + 1].append(current_process)
+                    else:
+                        ready_queues[i].append(current_process)
+                break
+        else:
+            time += 1
+
+    times.append(total_time)
+    return processes, times
+
+
+def calculate_times(processes, schedule):
+    """
+    Calculate waiting times and turnaround times for the given schedule.
+
+    Args:
+    processes (list of Process): The list of processes.
+    schedule (list of tuple): The schedule as a list of (process_name, start_time, end_time).
+
+    Returns:
+    tuple: Average waiting time, average turnaround time.
+    """
+    # mapping process names to their corresponding Process objects
+    process_dict = {p.name: p for p in processes}
+    # dictionary to store the total waiting time for each process, initially set to 0
+    wait_times = {p.name: 0 for p in processes}
+    # dictionary to store the turnaround time for each process, initially set to 0
+    turnaround_times = {p.name: 0 for p in processes}
+    # dictionary to track the last finish time of each process, initially set to 0
+    last_finish_time = {p.name: 0 for p in processes}
+    # calculating the waiting time and turnaround time for each process based on when it was scheduled to start and end
+    for process_name, start_time, end_time in schedule:
+        p = process_dict[process_name]
+        if last_finish_time[process_name] < p.arrival_time:
+            wait_times[process_name] += (start_time - p.arrival_time)
+            # computes the additional waiting time for such processes based on the difference between the current start time and the last finish time
+        else:
+            wait_times[process_name] += (start_time - last_finish_time[process_name])
+        turnaround_times[process_name] = end_time - p.arrival_time
+        last_finish_time[process_name] = end_time
+
+    total_waiting_time = sum(wait_times.values())
+    total_turnaround_time = sum(turnaround_times.values())
+    n = len(processes)
+
+    average_waiting_time = total_waiting_time / n
+    average_turnaround_time = total_turnaround_time / n
+
+    return average_waiting_time, average_turnaround_time
+
+
+# Function to plot the Gantt chart
+def draw(processes, times, title, size):
+    """
+    Draw a Gantt chart for process scheduling.
+
+    Args:
+    processes (list): List of process names.
+    times (list): List of time points for the start and end of each process.
+    title (str): Title of the Gantt chart.
+    size (int): Font size for the labels.
+    """
+    # Create combinations of process, duration, and start time
+    combinations = [(processes[i], times[i + 1] - times[i], times[i]) for i in range(len(processes))]
+    # Sort combinations by start times
+    combinations.sort(key=lambda x: x[2])
+
+    # Define a color map for different processes
+    color_map = plt.get_cmap('tab10')
+    process_colors = {}
+    unique_processes = sorted(set(processes))
+
+    # Assign colors to processes
+    for i, process in enumerate(unique_processes):
+        process_colors[process] = color_map(i % 10)
+
+    # Plot Gantt chart bars
+    fig, ax = plt.subplots(figsize=(15, 8), dpi=100)
+    ax.set_title(title, fontsize=size + 4, fontweight='bold', family='monospace')
+    ax.set_xlabel("Time", fontsize=size, fontweight='bold', family='monospace')
+    ax.set_ylabel("Processes", fontsize=size, fontweight='bold', family='monospace')
+
+    for process, duration, start in combinations:
+        ax.barh(process, duration, left=start, color=process_colors[process], edgecolor='black', height=0.6)
+        ax.text(start + duration / 2, process, f'{process}', va='center', ha='center', fontsize=size, color='black',
+                bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.3'))  # Text with white background
+
+    # Set y-ticks to be the list of unique processes
+    ax.set_yticks(range(len(unique_processes)))
+    ax.set_yticklabels(unique_processes, fontsize=size, fontweight='bold', family='monospace')
+
+    # Set x-ticks and format them
+    ax.set_xticks(times)
+    ax.set_xticklabels(
+        [f'{time:.1f}' if time % 1 else f'{int(time)}' for time in times],
+        fontsize=size * 0.8,  # Make x-axis labels smaller
+        rotation=90,  # Rotate for better readability
+        ha='center',  # Center-align
+        family='monospace'
+    )
+
+    # Create legend
+    patches = [mpatches.Patch(color=color, label=process) for process, color in process_colors.items()]
+    ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=size)
+
+    plt.tight_layout()  # Adjust layout for a neat presentation
+    plt.show()
+
+
+# Main function
+def main():
+    processes = [
+        Process("P1", 0, 15, 3, 5),
+        Process("P2", 1, 23, 2, 14),
+        Process("P3", 3, 14, 3, 6),
+        Process("P4", 4, 16, 1, 15),
+        Process("P5", 6, 10, 0, 13),
+        Process("P6", 7, 22, 1, 4),
+        Process("P7", 8, 28, 2, 10),
+    ]
+    total_time = 300
+
+    # Non-preemptive Priority Scheduling with Round Robin
+    processes1, times1 = non_preemptive_priority_scheduling_with_round_robin(processes, total_time, 2)
+    draw(processes1, times1, "Non-preemptive Priority Scheduling with Round Robin", 10)
+    schedule1 = list(zip(processes1, times1[:-1], times1[1:]))
+    avg_wt1, avg_tat1 = calculate_times(processes, schedule1)
+    print(
+        f"Non-preemptive Priority Scheduling with Round Robin\nAverage Waiting Time: {avg_wt1:.2f}, Average Turnaround Time: {avg_tat1:.2f}")
+
+    # Preemptive Priority Scheduling with Aging
+    processes2, times2 = preemptive_priority_scheduling_with_aging(processes, total_time, 2)
+    draw(processes2, times2, "Preemptive Priority Scheduling with Aging", 10)
+    schedule2 = list(zip(processes2, times2[:-1], times2[1:]))
+    avg_wt2, avg_tat2 = calculate_times(processes, schedule2)
+    print(
+        f"Preemptive Priority Scheduling with Aging\nAverage Waiting Time: {avg_wt2:.2f}, Average Turnaround Time: {avg_tat2:.2f}")
+
+    # Multilevel Feedback Queue Scheduling
+    processes3, times3 = multilevel_feedback_queue(processes, total_time)
+    draw(processes3, times3, "Multilevel Feedback Queue Scheduling", 10)
+    schedule3 = list(zip(processes3, times3[:-1], times3[1:]))
+    avg_wt3, avg_tat3 = calculate_times(processes, schedule3)
+    print(
+        f"Multilevel Feedback Queue Scheduling\nAverage Waiting Time: {avg_wt3:.2f}, Average Turnaround Time: {avg_tat3:.2f}")
+
+
+if __name__ == "__main__":
+    main()
